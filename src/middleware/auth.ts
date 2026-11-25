@@ -11,7 +11,7 @@ async function loadUser(req: Request): Promise<AuthUser | null> {
   try {
     id = Number(verifyToken(header.slice(7)).sub);
   } catch {
-    throw new HttpError(401, 'Token tidak valid atau kedaluwarsa');
+    throw new HttpError(401, 'Token tidak valid atau kedaluwarsa');aku
   }
   // Selalu ambil dari DB supaya perubahan role / akun nonaktif langsung berlaku
   const u = await queryOne<any>(
