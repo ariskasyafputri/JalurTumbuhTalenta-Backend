@@ -1,3 +1,4 @@
+import crypto from 'crypto';
 import { Router } from 'express';
 import { z } from 'zod';
 import { execute, query, queryOne } from '../../config/db';
@@ -5,6 +6,15 @@ import { authenticate, authorize, canManageCompany, optionalAuth } from '../../m
 import { asyncHandler, HttpError, pagination, parseId } from '../../utils/http';
 
 const router = Router();
+
+function generateJobSlug(title: string) {
+  const cleanTitle = title
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/(^-|-$)+/g, '');
+  const randomCode = crypto.randomBytes(4).toString('hex');
+  return `${cleanTitle || 'lowongan'}-${randomCode}`;
+}
 
 const baseSchema = z.object({
   companyId: z.coerce.number().int().positive(),
@@ -15,6 +25,9 @@ const baseSchema = z.object({
   detailAddress: z.string().trim().min(3, 'Alamat detail wajib diisi').max(1000),
   salaryMin: z.number().int().nonnegative().nullable().optional(),
   salaryMax: z.number().int().nonnegative().nullable().optional(),
+  hideSalary: z.boolean().optional().default(false),
+  minExperience: z.string().trim().max(80).nullable().optional(),
+  benefitIds: z.array(z.coerce.number().int().positive()).optional().default([]),
   description: z.string().trim().min(10, 'Deskripsi pekerjaan minimal 10 karakter'),
   requirements: z.string().trim().min(5, 'Kualifikasi wajib diisi'),
   openedAt: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Tanggal dibuka harus YYYY-MM-DD'),
@@ -23,7 +36,7 @@ const baseSchema = z.object({
 });
 
 const createSchema = baseSchema
-  .refine((d) => d.salaryMin == null || d.salaryMax == null || d.salaryMin <= d.salaryMax, {
+  .refine((d) => d.hideSalary || d.salaryMin == null || d.salaryMax == null || d.salaryMin <= d.salaryMax, {
     message: 'Gaji minimal tidak boleh lebih besar dari gaji maksimal',
     path: ['salaryMin'],
   })
@@ -43,6 +56,8 @@ const columnMap: Record<string, string> = {
   detailAddress: 'detail_address',
   salaryMin: 'salary_min',
   salaryMax: 'salary_max',
+  hideSalary: 'hide_salary',
+  minExperience: 'min_experience',
   description: 'description',
   requirements: 'requirements',
   openedAt: 'opened_at',
@@ -51,12 +66,12 @@ const columnMap: Record<string, string> = {
 };
 
 const SELECT = `
-  SELECT r.id, r.company_id, c.name AS company_name, c.industry AS company_industry,
-         c.is_verified AS company_verified, c.subscription_plan,
+  SELECT r.id, r.slug, r.company_id, c.name AS company_name, c.logo_path AS company_logo_path,
+         c.industry AS company_industry, c.company_size, c.is_verified AS company_verified, c.subscription_plan,
          r.category_id, jc.name AS category_name,
          r.employment_type_id, et.name AS employment_type_name,
          r.province_id, p.name AS province_name,
-         r.title, r.detail_address, r.salary_min, r.salary_max,
+         r.title, r.detail_address, r.salary_min, r.salary_max, r.hide_salary, r.min_experience,
          r.description, r.requirements, r.opened_at, r.closed_at,
          r.status, r.created_at, r.updated_at,
          (SELECT COUNT(*) FROM applications a WHERE a.recruitment_id = r.id) AS applicants_count
@@ -66,6 +81,43 @@ const SELECT = `
   JOIN employment_types et ON et.id = r.employment_type_id
   JOIN provinces p ON p.id = r.province_id
 `;
+
+async function attachBenefits(rows: any[]) {
+  if (!rows.length) return rows;
+  const ids = rows.map((r) => r.id);
+  const benefitRows = await query<{ recruitment_id: number; id: number; name: string }>(
+    `SELECT rb.recruitment_id, b.id, b.name
+     FROM recruitment_benefits rb
+     JOIN benefits b ON b.id = rb.benefit_id
+     WHERE rb.recruitment_id IN (${ids.map(() => '?').join(',')})
+     ORDER BY b.id ASC`,
+    ids
+  );
+
+  const map = new Map<number, { id: number; name: string }[]>();
+  for (const br of benefitRows) {
+    const arr = map.get(br.recruitment_id) ?? [];
+    arr.push({ id: br.id, name: br.name });
+    map.set(br.recruitment_id, arr);
+  }
+
+  for (const row of rows) {
+    row.benefits = map.get(row.id) ?? [];
+  }
+  return rows;
+}
+
+async function syncRecruitmentBenefits(recruitmentId: number, benefitIds: number[]) {
+  await execute('DELETE FROM recruitment_benefits WHERE recruitment_id = ?', [recruitmentId]);
+  const uniqueIds = Array.from(new Set(benefitIds));
+  if (!uniqueIds.length) return;
+  const valuesSql = uniqueIds.map(() => '(?, ?)').join(', ');
+  const params: number[] = [];
+  for (const bid of uniqueIds) {
+    params.push(recruitmentId, bid);
+  }
+  await execute(`INSERT INTO recruitment_benefits (recruitment_id, benefit_id) VALUES ${valuesSql}`, params);
+}
 
 // PUBLIK: Daftar lowongan terbuka
 router.get(
@@ -106,16 +158,17 @@ router.get(
       params
     );
 
-    const data = await query(`${SELECT} ${w} ORDER BY r.created_at DESC LIMIT ? OFFSET ?`, [
+    const data = await query<any>(`${SELECT} ${w} ORDER BY r.created_at DESC LIMIT ? OFFSET ?`, [
       ...params,
       limit,
       offset,
     ]);
+    await attachBenefits(data);
     res.json({ data, meta: { page, limit, total, totalPages: Math.ceil(total / limit) } });
   })
 );
 
-// STAFF: Kelola lowongan (company: semua perusahaan miliknya; admin/super_admin: semua)
+// STAFF: Kelola lowongan
 router.get(
   '/manage/list',
   authenticate,
@@ -159,31 +212,41 @@ router.get(
       `SELECT COUNT(*) AS total FROM recruitments r JOIN companies c ON c.id = r.company_id ${w}`,
       params
     );
-    const data = await query(`${SELECT} ${w} ORDER BY r.created_at DESC LIMIT ? OFFSET ?`, [
+    const data = await query<any>(`${SELECT} ${w} ORDER BY r.created_at DESC LIMIT ? OFFSET ?`, [
       ...params,
       limit,
       offset,
     ]);
+    await attachBenefits(data);
     res.json({ data, meta: { page, limit, total, totalPages: Math.ceil(total / limit) } });
   })
 );
 
-// DETAIL LOWONGAN
+// DETAIL LOWONGAN (Mendukung slug maupun numeric ID untuk halaman edit dashboard)
 router.get(
-  '/:id',
+  '/:slug',
   optionalAuth,
   asyncHandler(async (req, res) => {
-    const id = parseId(req.params.id);
-    const rec = await queryOne<any>(`${SELECT} WHERE r.id = ?`, [id]);
+    const param = String(req.params.slug || '').trim();
+    if (!param) throw new HttpError(400, 'Identifier lowongan tidak valid');
+
+    const isNumericId = /^\d+$/.test(param);
+    const rec = await queryOne<any>(
+      `${SELECT} WHERE ${isNumericId ? 'r.id = ?' : 'r.slug = ?'}`,
+      [isNumericId ? Number(param) : param]
+    );
     if (!rec) throw new HttpError(404, 'Lowongan tidak ditemukan');
+
     const u = req.user;
     const isOwner = u && canManageCompany(u, rec.company_id);
     if (rec.status !== 'open' && !isOwner) throw new HttpError(404, 'Lowongan tidak ditemukan');
+
+    await attachBenefits([rec]);
     res.json({ data: rec });
   })
 );
 
-// BUAT LOWONGAN (cek batas paket perusahaan dari Admin)
+// BUAT LOWONGAN
 router.post(
   '/',
   authenticate,
@@ -213,19 +276,24 @@ router.post(
       }
     }
 
+    const slug = generateJobSlug(d.title);
+
     const r = await execute(
       `INSERT INTO recruitments
-       (company_id, category_id, employment_type_id, province_id, title, detail_address, salary_min, salary_max, description, requirements, opened_at, closed_at, status, created_by)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+       (slug, company_id, category_id, employment_type_id, province_id, title, detail_address, salary_min, salary_max, hide_salary, min_experience, description, requirements, opened_at, closed_at, status, created_by)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
+        slug,
         d.companyId,
         d.categoryId,
         d.employmentTypeId,
         d.provinceId,
         d.title,
         d.detailAddress,
-        d.salaryMin ?? null,
-        d.salaryMax ?? null,
+        d.hideSalary ? null : (d.salaryMin ?? null),
+        d.hideSalary ? null : (d.salaryMax ?? null),
+        d.hideSalary ? 1 : 0,
+        d.minExperience ?? null,
         d.description,
         d.requirements,
         d.openedAt,
@@ -234,7 +302,14 @@ router.post(
         u.id,
       ]
     );
-    res.status(201).json({ data: await queryOne(`${SELECT} WHERE r.id = ?`, [r.insertId]) });
+
+    if (d.benefitIds?.length) {
+      await syncRecruitmentBenefits(r.insertId, d.benefitIds);
+    }
+
+    const created = await queryOne<any>(`${SELECT} WHERE r.id = ?`, [r.insertId]);
+    await attachBenefits([created]);
+    res.status(201).json({ data: created });
   })
 );
 
@@ -253,13 +328,27 @@ router.patch(
   asyncHandler(async (req, res) => {
     const id = await getManageable(req);
     const d = updateSchema.parse(req.body) as Record<string, any>;
+
+    if (d.hideSalary === true) {
+      d.salaryMin = null;
+      d.salaryMax = null;
+    }
+
     const entries = Object.entries(d).filter(([k, v]) => v !== undefined && columnMap[k]);
-    if (!entries.length) throw new HttpError(400, 'Tidak ada data yang diubah');
-    await execute(
-      `UPDATE recruitments SET ${entries.map(([k]) => `${columnMap[k]} = ?`).join(', ')} WHERE id = ?`,
-      [...entries.map(([, v]) => v), id]
-    );
-    res.json({ data: await queryOne(`${SELECT} WHERE r.id = ?`, [id]) });
+    if (entries.length) {
+      await execute(
+        `UPDATE recruitments SET ${entries.map(([k]) => `${columnMap[k]} = ?`).join(', ')} WHERE id = ?`,
+        [...entries.map(([k, v]) => (k === 'hideSalary' ? (v ? 1 : 0) : v)), id]
+      );
+    }
+
+    if (Array.isArray(d.benefitIds)) {
+      await syncRecruitmentBenefits(id, d.benefitIds);
+    }
+
+    const updated = await queryOne<any>(`${SELECT} WHERE r.id = ?`, [id]);
+    await attachBenefits([updated]);
+    res.json({ data: updated });
   })
 );
 
@@ -274,7 +363,7 @@ router.delete(
   })
 );
 
-// LIHAT PELAMAR LOWONGAN BESERTA PROFIL & PENGALAMAN KERJANYA
+// LIHAT PELAMAR LOWONGAN BESERTA PROFIL, NO TELEPON & PENGALAMAN KERJANYA
 router.get(
   '/:id/applications',
   authenticate,
@@ -297,7 +386,7 @@ router.get(
     const rows = await query<any>(
       `SELECT a.id, a.status, a.cover_letter, a.cv_snapshot_path, a.notes, a.applied_at,
               u.id AS candidate_id, u.name AS candidate_name, u.email AS candidate_email,
-              cp.phone, cp.headline, cp.education_level, cp.institution, cp.major,
+              cp.phone, cp.photo_path, cp.headline, cp.education_level, cp.institution, cp.major,
               cp.graduation_year, cp.skills, cp.certifications, cp.portfolio_url, cp.cv_path,
               p.name AS province_name
        FROM applications a

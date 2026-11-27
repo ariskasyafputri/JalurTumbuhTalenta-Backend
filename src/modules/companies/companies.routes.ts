@@ -4,6 +4,7 @@ import { z } from 'zod';
 import { execute, pool, query, queryOne } from '../../config/db';
 import { authenticate, authorize, canManageCompany } from '../../middleware/auth';
 import { asyncHandler, HttpError, pagination, parseId } from '../../utils/http';
+import { uploadLogo, deleteFileIfExists } from '../../utils/upload';
 
 const router = Router();
 router.use(authenticate, authorize('company', 'admin', 'super_admin'));
@@ -15,7 +16,6 @@ const SELECT_COMPANY = `
   LEFT JOIN provinces p ON p.id = c.province_id
 `;
 
-// GET /api/companies/my -> daftar perusahaan yang terhubung dengan user login (1 user bisa banyak perusahaan)
 router.get(
   '/my',
   asyncHandler(async (req, res) => {
@@ -35,10 +35,10 @@ router.get(
   })
 );
 
-// POST /api/companies -> user company membuat/menghubungkan perusahaan tambahan
 const createCompanySchema = z.object({
   name: z.string().trim().min(2).max(160),
   industry: z.string().trim().max(120).optional(),
+  companySize: z.string().trim().max(60).optional(),
   npwp: z.string().trim().max(30).optional(),
   nib: z.string().trim().max(30).optional(),
   provinceId: z.coerce.number().int().positive().optional(),
@@ -58,11 +58,12 @@ router.post(
     try {
       await conn.beginTransaction();
       const [c] = await conn.query<ResultSetHeader>(
-        `INSERT INTO companies (name, industry, npwp, nib, province_id, detail_address, website, phone, description)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        `INSERT INTO companies (name, industry, company_size, npwp, nib, province_id, detail_address, website, phone, description)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [
           d.name,
           d.industry ?? null,
+          d.companySize ?? null,
           d.npwp ?? null,
           d.nib ?? null,
           d.provinceId ?? null,
@@ -91,7 +92,6 @@ router.post(
   })
 );
 
-// GET /api/companies
 router.get(
   '/',
   asyncHandler(async (req, res) => {
@@ -132,6 +132,7 @@ const updateSchema = z.object({
   name: z.string().trim().min(2).max(160).optional(),
   description: z.string().trim().max(5000).nullable().optional(),
   industry: z.string().trim().max(120).nullable().optional(),
+  companySize: z.string().trim().max(60).nullable().optional(),
   npwp: z.string().trim().max(30).nullable().optional(),
   nib: z.string().trim().max(30).nullable().optional(),
   provinceId: z.coerce.number().int().positive().nullable().optional(),
@@ -151,6 +152,7 @@ router.patch(
       name: 'name',
       description: 'description',
       industry: 'industry',
+      companySize: 'company_size',
       npwp: 'npwp',
       nib: 'nib',
       provinceId: 'province_id',
@@ -168,6 +170,37 @@ router.patch(
     );
     if (!r.affectedRows) throw new HttpError(404, 'Perusahaan tidak ditemukan');
     res.json({ data: await queryOne(`${SELECT_COMPANY} WHERE c.id = ?`, [id]) });
+  })
+);
+
+router.post(
+  '/:id/logo',
+  uploadLogo.single('logo'),
+  asyncHandler(async (req, res) => {
+    const id = parseId(req.params.id);
+    if (!canManageCompany(req.user!, id)) {
+      if (req.file) deleteFileIfExists(`/uploads/logos/${req.file.filename}`);
+      throw new HttpError(403, 'Kamu tidak punya akses ke perusahaan ini');
+    }
+
+    if (!req.file) throw new HttpError(400, 'File logo wajib diunggah');
+    const logoPath = `/uploads/logos/${req.file.filename}`;
+
+    const existing = await queryOne<{ id: number; logo_path: string | null }>(
+      'SELECT id, logo_path FROM companies WHERE id = ?',
+      [id]
+    );
+
+    if (!existing) {
+      deleteFileIfExists(logoPath);
+      throw new HttpError(404, 'Perusahaan tidak ditemukan');
+    }
+
+    deleteFileIfExists(existing.logo_path);
+    await execute('UPDATE companies SET logo_path = ? WHERE id = ?', [logoPath, id]);
+
+    const updated = await queryOne(`${SELECT_COMPANY} WHERE c.id = ?`, [id]);
+    res.json({ data: updated, logoPath });
   })
 );
 

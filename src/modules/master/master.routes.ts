@@ -29,14 +29,23 @@ router.get(
 );
 
 router.get(
+  '/benefits',
+  asyncHandler(async (_req, res) => {
+    const data = await query('SELECT id, name FROM benefits ORDER BY id ASC');
+    res.json({ data });
+  })
+);
+
+router.get(
   '/all',
   asyncHandler(async (_req, res) => {
-    const [categories, employmentTypes, provinces] = await Promise.all([
+    const [categories, employmentTypes, provinces, benefits] = await Promise.all([
       query('SELECT id, name FROM job_categories ORDER BY name ASC'),
       query('SELECT id, name FROM employment_types ORDER BY id ASC'),
       query('SELECT id, name FROM provinces ORDER BY id ASC'),
+      query('SELECT id, name FROM benefits ORDER BY id ASC'),
     ]);
-    res.json({ categories, employmentTypes, provinces });
+    res.json({ categories, employmentTypes, provinces, benefits });
   })
 );
 
