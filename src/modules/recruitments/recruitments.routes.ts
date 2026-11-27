@@ -16,6 +16,26 @@ function generateJobSlug(title: string) {
   return `${cleanTitle || 'lowongan'}-${randomCode}`;
 }
 
+async function generateUniqueJobSlug(title: string): Promise<string> {
+  for (let attempt = 0; attempt < 5; attempt++) {
+    const candidate = generateJobSlug(title);
+    const existing = await queryOne<{ id: number }>('SELECT id FROM recruitments WHERE slug = ? LIMIT 1', [
+      candidate,
+    ]);
+    if (!existing) return candidate;
+  }
+  return `${generateJobSlug(title)}-${crypto.randomBytes(2).toString('hex')}`;
+}
+
+async function getRecruitmentBySlug(slugParam: unknown, columns = 'id, slug, company_id') {
+  const slug = String(slugParam || '').trim();
+  if (!slug) throw new HttpError(400, 'Slug lowongan tidak valid');
+
+  const rec = await queryOne<any>(`SELECT ${columns} FROM recruitments WHERE slug = ? LIMIT 1`, [slug]);
+  if (!rec) throw new HttpError(404, 'Lowongan tidak ditemukan');
+  return rec;
+}
+
 const baseSchema = z.object({
   companyId: z.coerce.number().int().positive(),
   categoryId: z.coerce.number().int().positive('Bidang posisi wajib dipilih'),
@@ -222,19 +242,15 @@ router.get(
   })
 );
 
-// DETAIL LOWONGAN (Mendukung slug maupun numeric ID untuk halaman edit dashboard)
+// DETAIL LOWONGAN (Murni pakai slug)
 router.get(
   '/:slug',
   optionalAuth,
   asyncHandler(async (req, res) => {
-    const param = String(req.params.slug || '').trim();
-    if (!param) throw new HttpError(400, 'Identifier lowongan tidak valid');
+    const slug = String(req.params.slug || '').trim();
+    if (!slug) throw new HttpError(400, 'Slug lowongan tidak valid');
 
-    const isNumericId = /^\d+$/.test(param);
-    const rec = await queryOne<any>(
-      `${SELECT} WHERE ${isNumericId ? 'r.id = ?' : 'r.slug = ?'}`,
-      [isNumericId ? Number(param) : param]
-    );
+    const rec = await queryOne<any>(`${SELECT} WHERE r.slug = ?`, [slug]);
     if (!rec) throw new HttpError(404, 'Lowongan tidak ditemukan');
 
     const u = req.user;
@@ -276,7 +292,7 @@ router.post(
       }
     }
 
-    const slug = generateJobSlug(d.title);
+    const slug = await generateUniqueJobSlug(d.title);
 
     const r = await execute(
       `INSERT INTO recruitments
@@ -314,15 +330,13 @@ router.post(
 );
 
 async function getManageable(req: any) {
-  const id = parseId(req.params.id);
-  const rec = await queryOne<any>('SELECT id, company_id FROM recruitments WHERE id = ?', [id]);
-  if (!rec) throw new HttpError(404, 'Lowongan tidak ditemukan');
+  const rec = await getRecruitmentBySlug(req.params.slug, 'id, slug, company_id');
   if (!canManageCompany(req.user, rec.company_id)) throw new HttpError(403, 'Kamu tidak punya akses');
-  return id;
+  return rec.id as number;
 }
 
 router.patch(
-  '/:id',
+  '/:slug',
   authenticate,
   authorize('company', 'admin', 'super_admin'),
   asyncHandler(async (req, res) => {
@@ -353,7 +367,7 @@ router.patch(
 );
 
 router.delete(
-  '/:id',
+  '/:slug',
   authenticate,
   authorize('company', 'admin', 'super_admin'),
   asyncHandler(async (req, res) => {
@@ -365,7 +379,7 @@ router.delete(
 
 // LIHAT PELAMAR LOWONGAN BESERTA PROFIL, NO TELEPON & PENGALAMAN KERJANYA
 router.get(
-  '/:id/applications',
+  '/:slug/applications',
   authenticate,
   authorize('company', 'admin', 'super_admin'),
   asyncHandler(async (req, res) => {

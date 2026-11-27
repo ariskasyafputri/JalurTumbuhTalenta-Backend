@@ -10,17 +10,19 @@ const applySchema = z.object({
   coverLetter: z.string().trim().max(5000).optional(),
 });
 
-// Kandidat melamar: POST /api/applications/apply/:recruitmentId
+// Kandidat melamar: POST /api/applications/apply/:slug
 router.post(
-  '/apply/:recruitmentId',
+  '/apply/:slug',
   authenticate,
   authorize('candidate'),
   asyncHandler(async (req, res) => {
-    const recruitmentId = parseId(req.params.recruitmentId);
+    const slug = String(req.params.slug || '').trim();
+    if (!slug) throw new HttpError(400, 'Slug lowongan tidak valid');
+
     const d = applySchema.parse(req.body);
     const rec = await queryOne<any>(
-      "SELECT id, status, closed_at FROM recruitments WHERE id = ? AND status = 'open'",
-      [recruitmentId]
+      "SELECT id, slug, status, closed_at FROM recruitments WHERE slug = ? AND status = 'open'",
+      [slug]
     );
     if (!rec) throw new HttpError(404, 'Lowongan tidak ditemukan atau sudah ditutup');
     if (rec.closed_at && new Date(String(rec.closed_at).slice(0, 10) + 'T23:59:59') < new Date()) {
@@ -28,7 +30,7 @@ router.post(
     }
     if (
       await queryOne('SELECT id FROM applications WHERE recruitment_id = ? AND candidate_id = ?', [
-        recruitmentId,
+        rec.id,
         req.user!.id,
       ])
     ) {
@@ -38,9 +40,16 @@ router.post(
     const profile = await queryOne<any>('SELECT cv_path FROM candidate_profiles WHERE user_id = ?', [req.user!.id]);
     const r = await execute(
       'INSERT INTO applications (recruitment_id, candidate_id, cover_letter, cv_snapshot_path) VALUES (?, ?, ?, ?)',
-      [recruitmentId, req.user!.id, d.coverLetter ?? null, profile?.cv_path ?? null]
+      [rec.id, req.user!.id, d.coverLetter ?? null, profile?.cv_path ?? null]
     );
-    res.status(201).json({ data: { id: r.insertId, recruitmentId, status: 'submitted' } });
+    res.status(201).json({
+      data: {
+        id: r.insertId,
+        recruitmentId: rec.id,
+        recruitmentSlug: rec.slug,
+        status: 'submitted',
+      },
+    });
   })
 );
 
