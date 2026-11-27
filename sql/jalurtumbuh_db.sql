@@ -3,7 +3,7 @@
 -- https://www.phpmyadmin.net/
 --
 -- Host: 127.0.0.1
--- Generation Time: Nov 27, 2026 at 08:11 AM
+-- Generation Time: Nov 27, 2026 at 08:15 AM
 -- Server version: 10.4.32-MariaDB
 -- PHP Version: 8.0.30
 
@@ -159,7 +159,6 @@ CREATE TABLE `companies` (
 --
 
 INSERT INTO `companies` (`id`, `name`, `industry`, `company_size`, `description`, `npwp`, `nib`, `province_id`, `detail_address`, `website`, `phone`, `logo_path`, `subscription_plan`, `max_active_jobs`, `can_view_cv`, `is_verified`, `created_at`, `updated_at`) VALUES
-(1, 'ariska', 'teknologi', NULL, 'ngoding', '8238827487248', '123458584958948594', 11, 'blok m', 'https://www.jalurtumbuh.com/', '0193093093', '/uploads/logos/logo-company-1-1795748097811.jpeg', 'free', 10, 1, 1, '2026-11-27 02:14:20', '2026-11-27 02:54:57'),
 (2, 'PT Jalur Tumbuh', NULL, NULL, '-', '1234567890', '183878738838', 11, 'blok m', 'https://www.jalurtumbuh.com/', '0892882882', NULL, 'free', 10, 1, 1, '2026-11-27 07:11:18', '2026-11-27 07:11:18');
 
 -- --------------------------------------------------------
@@ -321,7 +320,7 @@ CREATE TABLE `recruitments` (
 --
 
 INSERT INTO `recruitments` (`id`, `slug`, `company_id`, `category_id`, `employment_type_id`, `province_id`, `title`, `detail_address`, `salary_min`, `salary_max`, `hide_salary`, `min_experience`, `description`, `requirements`, `opened_at`, `closed_at`, `status`, `created_by`, `created_at`, `updated_at`) VALUES
-(1, 'huehe-d99aa9', 1, 9, 1, 11, 'huehe', 'blok m', 8888, 999999, 0, NULL, 'hshgdhshdhgdshghd', 'sjsssjjjjjjjjjjjjjj jsjsj', '2026-11-27', '2026-12-27', 'open', NULL, '2026-11-27 02:55:58', '2026-11-27 03:24:44');
+(2, 'frontend-developer-f40f2841', 2, 9, 1, 11, 'Frontend Developer', 'blok m', NULL, NULL, 0, 'Minimal 2 Tahun', 'Buat website', 'Bisa ngoding', '2026-11-27', '2026-12-27', 'open', 6, '2026-11-27 07:14:13', '2026-11-27 07:14:13');
 
 -- --------------------------------------------------------
 
@@ -333,6 +332,14 @@ CREATE TABLE `recruitment_benefits` (
   `recruitment_id` int(11) NOT NULL,
   `benefit_id` int(11) NOT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+--
+-- Dumping data for table `recruitment_benefits`
+--
+
+INSERT INTO `recruitment_benefits` (`recruitment_id`, `benefit_id`) VALUES
+(2, 2),
+(2, 5);
 
 -- --------------------------------------------------------
 
@@ -519,7 +526,7 @@ ALTER TABLE `provinces`
 -- AUTO_INCREMENT for table `recruitments`
 --
 ALTER TABLE `recruitments`
-  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=2;
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=3;
 
 --
 -- AUTO_INCREMENT for table `users`
