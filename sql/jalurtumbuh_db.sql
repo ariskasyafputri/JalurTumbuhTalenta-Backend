@@ -3,7 +3,7 @@
 -- https://www.phpmyadmin.net/
 --
 -- Host: 127.0.0.1
--- Generation Time: Nov 27, 2026 at 09:07 AM
+-- Generation Time: Nov 27, 2026 at 10:22 AM
 -- Server version: 10.4.32-MariaDB
 -- PHP Version: 8.0.30
 
@@ -301,7 +301,7 @@ INSERT INTO `provinces` (`id`, `name`) VALUES
 
 CREATE TABLE `recruitments` (
   `id` int(11) NOT NULL,
-  `slug` varchar(255) DEFAULT NULL,
+  `slug` varchar(255) NOT NULL,
   `company_id` int(11) NOT NULL,
   `category_id` int(11) NOT NULL,
   `employment_type_id` int(11) NOT NULL,
