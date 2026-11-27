@@ -56,8 +56,9 @@ router.get(
       [req.user!.id]
     );
     const data = await query(
-      `SELECT a.id, a.status, a.cover_letter, a.applied_at,
-              r.id AS recruitment_id, r.title, c.name AS company_name,
+      `SELECT a.id, a.status, a.cover_letter, a.notes, a.applied_at,
+              r.id AS recruitment_id, r.slug AS recruitment_slug, r.title,
+              c.name AS company_name, c.logo_path AS company_logo_path,
               p.name AS province_name, et.name AS employment_type_name
        FROM applications a
        JOIN recruitments r ON r.id = a.recruitment_id

@@ -3,7 +3,7 @@
 -- https://www.phpmyadmin.net/
 --
 -- Host: 127.0.0.1
--- Generation Time: Nov 27, 2026 at 08:15 AM
+-- Generation Time: Nov 27, 2026 at 09:07 AM
 -- Server version: 10.4.32-MariaDB
 -- PHP Version: 8.0.30
 
@@ -38,6 +38,13 @@ CREATE TABLE `applications` (
   `applied_at` timestamp NOT NULL DEFAULT current_timestamp(),
   `updated_at` timestamp NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp()
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+--
+-- Dumping data for table `applications`
+--
+
+INSERT INTO `applications` (`id`, `recruitment_id`, `candidate_id`, `cover_letter`, `cv_snapshot_path`, `status`, `notes`, `applied_at`, `updated_at`) VALUES
+(2, 2, 5, NULL, NULL, 'rejected', NULL, '2026-11-27 07:22:09', '2026-11-27 07:22:55');
 
 -- --------------------------------------------------------
 
@@ -159,7 +166,7 @@ CREATE TABLE `companies` (
 --
 
 INSERT INTO `companies` (`id`, `name`, `industry`, `company_size`, `description`, `npwp`, `nib`, `province_id`, `detail_address`, `website`, `phone`, `logo_path`, `subscription_plan`, `max_active_jobs`, `can_view_cv`, `is_verified`, `created_at`, `updated_at`) VALUES
-(2, 'PT Jalur Tumbuh', NULL, NULL, '-', '1234567890', '183878738838', 11, 'blok m', 'https://www.jalurtumbuh.com/', '0892882882', NULL, 'free', 10, 1, 1, '2026-11-27 07:11:18', '2026-11-27 07:11:18');
+(2, 'PT Jalur Tumbuh', NULL, NULL, '-', '1234567890', '183878738838', 11, 'blok m', 'https://www.jalurtumbuh.com/', '0892882882', '/uploads/logos/logo-company-2-1795764819793.jpeg', 'free', 10, 1, 1, '2026-11-27 07:11:18', '2026-11-27 07:33:39');
 
 -- --------------------------------------------------------
 
@@ -320,7 +327,7 @@ CREATE TABLE `recruitments` (
 --
 
 INSERT INTO `recruitments` (`id`, `slug`, `company_id`, `category_id`, `employment_type_id`, `province_id`, `title`, `detail_address`, `salary_min`, `salary_max`, `hide_salary`, `min_experience`, `description`, `requirements`, `opened_at`, `closed_at`, `status`, `created_by`, `created_at`, `updated_at`) VALUES
-(2, 'frontend-developer-f40f2841', 2, 9, 1, 11, 'Frontend Developer', 'blok m', NULL, NULL, 0, 'Minimal 2 Tahun', 'Buat website', 'Bisa ngoding', '2026-11-27', '2026-12-27', 'open', 6, '2026-11-27 07:14:13', '2026-11-27 07:14:13');
+(2, 'frontend-developer-f40f2841', 2, 9, 1, 11, 'Frontend Developer', 'blok m', NULL, NULL, 1, 'Minimal 2 Tahun', 'Buat website', 'Bisa ngoding', '2026-11-27', '2026-12-27', 'open', 6, '2026-11-27 07:14:13', '2026-11-27 07:21:28');
 
 -- --------------------------------------------------------
 
@@ -339,6 +346,7 @@ CREATE TABLE `recruitment_benefits` (
 
 INSERT INTO `recruitment_benefits` (`recruitment_id`, `benefit_id`) VALUES
 (2, 2),
+(2, 3),
 (2, 5);
 
 -- --------------------------------------------------------
@@ -472,7 +480,7 @@ ALTER TABLE `users`
 -- AUTO_INCREMENT for table `applications`
 --
 ALTER TABLE `applications`
-  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=2;
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=3;
 
 --
 -- AUTO_INCREMENT for table `benefits`
