@@ -15,6 +15,7 @@ export function errorHandler(err: any, _req: Request, res: Response, _next: Next
   }
   if (err instanceof HttpError) return res.status(err.status).json({ message: err.message });
   if (err?.code === 'ER_DUP_ENTRY') return res.status(409).json({ message: 'Data sudah ada (duplikat)' });
+  if (err?.code === 'LIMIT_FILE_SIZE') return res.status(400).json({ message: 'Ukuran file maksimal 5MB' });
   console.error(err);
   res.status(500).json({ message: 'Terjadi kesalahan pada server' });
 }

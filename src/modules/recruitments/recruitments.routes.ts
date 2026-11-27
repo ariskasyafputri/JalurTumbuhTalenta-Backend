@@ -7,81 +7,115 @@ import { asyncHandler, HttpError, pagination, parseId } from '../../utils/http';
 const router = Router();
 
 const baseSchema = z.object({
-  title: z.string().trim().min(3).max(200),
-  description: z.string().trim().min(10),
-  requirements: z.string().trim().nullable().optional(),
-  location: z.string().trim().max(150).nullable().optional(),
-  employmentType: z.enum(['full_time', 'part_time', 'contract', 'internship', 'freelance']).default('full_time'),
+  companyId: z.coerce.number().int().positive(),
+  categoryId: z.coerce.number().int().positive('Bidang posisi wajib dipilih'),
+  employmentTypeId: z.coerce.number().int().positive('Tipe pekerjaan wajib dipilih'),
+  provinceId: z.coerce.number().int().positive('Provinsi wajib dipilih'),
+  title: z.string().trim().min(3, 'Judul posisi minimal 3 karakter').max(180),
+  detailAddress: z.string().trim().min(3, 'Alamat detail wajib diisi').max(1000),
   salaryMin: z.number().int().nonnegative().nullable().optional(),
   salaryMax: z.number().int().nonnegative().nullable().optional(),
-  status: z.enum(['draft', 'open', 'closed']).default('draft'),
-  deadline: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Format YYYY-MM-DD').nullable().optional(),
-  companyId: z.number().int().positive().optional(), // hanya dipakai super_admin
+  description: z.string().trim().min(10, 'Deskripsi pekerjaan minimal 10 karakter'),
+  requirements: z.string().trim().min(5, 'Kualifikasi wajib diisi'),
+  openedAt: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Tanggal dibuka harus YYYY-MM-DD'),
+  closedAt: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Tanggal ditutup harus YYYY-MM-DD'),
+  status: z.enum(['draft', 'open', 'closed']).default('open'),
 });
 
-const createSchema = baseSchema.refine(
-  (d) => d.salaryMin == null || d.salaryMax == null || d.salaryMin <= d.salaryMax,
-  { message: 'salaryMin tidak boleh lebih besar dari salaryMax', path: ['salaryMin'] }
-);
-const updateSchema = baseSchema.partial().refine(
-  (d) => d.salaryMin == null || d.salaryMax == null || d.salaryMin <= d.salaryMax,
-  { message: 'salaryMin tidak boleh lebih besar dari salaryMax', path: ['salaryMin'] }
-);
+const createSchema = baseSchema
+  .refine((d) => d.salaryMin == null || d.salaryMax == null || d.salaryMin <= d.salaryMax, {
+    message: 'Gaji minimal tidak boleh lebih besar dari gaji maksimal',
+    path: ['salaryMin'],
+  })
+  .refine((d) => d.openedAt <= d.closedAt, {
+    message: 'Tanggal dibuka tidak boleh melewati tanggal ditutup',
+    path: ['closedAt'],
+  });
+
+const updateSchema = baseSchema.partial();
 
 const columnMap: Record<string, string> = {
+  companyId: 'company_id',
+  categoryId: 'category_id',
+  employmentTypeId: 'employment_type_id',
+  provinceId: 'province_id',
   title: 'title',
-  description: 'description',
-  requirements: 'requirements',
-  location: 'location',
-  employmentType: 'employment_type',
+  detailAddress: 'detail_address',
   salaryMin: 'salary_min',
   salaryMax: 'salary_max',
+  description: 'description',
+  requirements: 'requirements',
+  openedAt: 'opened_at',
+  closedAt: 'closed_at',
   status: 'status',
-  deadline: 'deadline',
 };
 
 const SELECT = `
-  SELECT r.id, r.company_id, c.name AS company_name, c.location AS company_location,
-         r.title, r.description, r.requirements, r.location, r.employment_type,
-         r.salary_min, r.salary_max, r.status, r.deadline, r.created_at, r.updated_at
-  FROM recruitments r JOIN companies c ON c.id = r.company_id`;
+  SELECT r.id, r.company_id, c.name AS company_name, c.industry AS company_industry,
+         c.is_verified AS company_verified, c.subscription_plan,
+         r.category_id, jc.name AS category_name,
+         r.employment_type_id, et.name AS employment_type_name,
+         r.province_id, p.name AS province_name,
+         r.title, r.detail_address, r.salary_min, r.salary_max,
+         r.description, r.requirements, r.opened_at, r.closed_at,
+         r.status, r.created_at, r.updated_at,
+         (SELECT COUNT(*) FROM applications a WHERE a.recruitment_id = r.id) AS applicants_count
+  FROM recruitments r
+  JOIN companies c ON c.id = r.company_id
+  JOIN job_categories jc ON jc.id = r.category_id
+  JOIN employment_types et ON et.id = r.employment_type_id
+  JOIN provinces p ON p.id = r.province_id
+`;
 
-// ---------- PUBLIK: daftar lowongan terbuka ----------
-// GET /api/recruitments?q=&location=&type=&companyId=&page=&limit=
+// PUBLIK: Daftar lowongan terbuka
 router.get(
   '/',
   asyncHandler(async (req, res) => {
     const { page, limit, offset } = pagination(req.query);
-    const where = ["r.status = 'open'", '(r.deadline IS NULL OR r.deadline >= CURDATE())'];
+    const where = ["r.status = 'open'", 'r.closed_at >= CURDATE()'];
     const params: any[] = [];
+
     if (req.query.q) {
-      where.push('(r.title LIKE ? OR c.name LIKE ?)');
-      params.push(`%${req.query.q}%`, `%${req.query.q}%`);
+      where.push('(r.title LIKE ? OR c.name LIKE ? OR jc.name LIKE ?)');
+      params.push(`%${req.query.q}%`, `%${req.query.q}%`, `%${req.query.q}%`);
     }
-    if (req.query.location) {
-      where.push('r.location LIKE ?');
-      params.push(`%${req.query.location}%`);
+    if (req.query.categoryId) {
+      where.push('r.category_id = ?');
+      params.push(parseId(req.query.categoryId));
     }
-    if (req.query.type) {
-      where.push('r.employment_type = ?');
-      params.push(req.query.type);
+    if (req.query.employmentTypeId) {
+      where.push('r.employment_type_id = ?');
+      params.push(parseId(req.query.employmentTypeId));
+    }
+    if (req.query.provinceId) {
+      where.push('r.province_id = ?');
+      params.push(parseId(req.query.provinceId));
     }
     if (req.query.companyId) {
       where.push('r.company_id = ?');
       params.push(parseId(req.query.companyId));
     }
+
     const w = `WHERE ${where.join(' AND ')}`;
     const [{ total }] = await query<{ total: number }>(
-      `SELECT COUNT(*) AS total FROM recruitments r JOIN companies c ON c.id = r.company_id ${w}`,
+      `SELECT COUNT(*) AS total
+       FROM recruitments r
+       JOIN companies c ON c.id = r.company_id
+       JOIN job_categories jc ON jc.id = r.category_id
+       ${w}`,
       params
     );
-    const data = await query(`${SELECT} ${w} ORDER BY r.created_at DESC LIMIT ? OFFSET ?`, [...params, limit, offset]);
+
+    const data = await query(`${SELECT} ${w} ORDER BY r.created_at DESC LIMIT ? OFFSET ?`, [
+      ...params,
+      limit,
+      offset,
+    ]);
     res.json({ data, meta: { page, limit, total, totalPages: Math.ceil(total / limit) } });
   })
 );
 
-// ---------- STAFF: daftar rekrutmen milik perusahaan (semua status) ----------
-// super_admin: semua perusahaan (bisa filter ?companyId=&status=)
+// STAFF: Kelola lowongan (company: semua perusahaan miliknya; admin/super_admin: semua)
 router.get(
   '/manage/list',
   authenticate,
@@ -91,82 +125,123 @@ router.get(
     const u = req.user!;
     const where: string[] = [];
     const params: any[] = [];
-    if (u.role === 'super_admin') {
-      if (req.query.companyId) {
-        where.push('r.company_id = ?');
-        params.push(parseId(req.query.companyId));
+
+    if (u.role === 'company') {
+      const ids = u.companies.map((c) => c.companyId);
+      if (!ids.length) {
+        return res.json({ data: [], meta: { page, limit, total: 0, totalPages: 0 } });
       }
-    } else {
+      if (req.query.companyId) {
+        const cid = parseId(req.query.companyId);
+        if (!ids.includes(cid)) throw new HttpError(403, 'Tidak punya akses ke perusahaan ini');
+        where.push('r.company_id = ?');
+        params.push(cid);
+      } else {
+        where.push(`r.company_id IN (${ids.map(() => '?').join(',')})`);
+        params.push(...ids);
+      }
+    } else if (req.query.companyId) {
       where.push('r.company_id = ?');
-      params.push(u.companyId);
+      params.push(parseId(req.query.companyId));
     }
+
     if (req.query.status) {
       where.push('r.status = ?');
       params.push(req.query.status);
     }
     if (req.query.q) {
-      where.push('r.title LIKE ?');
-      params.push(`%${req.query.q}%`);
+      where.push('(r.title LIKE ? OR c.name LIKE ?)');
+      params.push(`%${req.query.q}%`, `%${req.query.q}%`);
     }
+
     const w = where.length ? `WHERE ${where.join(' AND ')}` : '';
     const [{ total }] = await query<{ total: number }>(
-      `SELECT COUNT(*) AS total FROM recruitments r ${w}`,
+      `SELECT COUNT(*) AS total FROM recruitments r JOIN companies c ON c.id = r.company_id ${w}`,
       params
     );
-    const data = await query(
-      `${SELECT} ${w} ORDER BY r.created_at DESC LIMIT ? OFFSET ?`,
-      [...params, limit, offset]
-    );
+    const data = await query(`${SELECT} ${w} ORDER BY r.created_at DESC LIMIT ? OFFSET ?`, [
+      ...params,
+      limit,
+      offset,
+    ]);
     res.json({ data, meta: { page, limit, total, totalPages: Math.ceil(total / limit) } });
   })
 );
 
-// ---------- Detail ----------
+// DETAIL LOWONGAN
 router.get(
   '/:id',
   optionalAuth,
   asyncHandler(async (req, res) => {
     const id = parseId(req.params.id);
     const rec = await queryOne<any>(`${SELECT} WHERE r.id = ?`, [id]);
-    if (!rec) throw new HttpError(404, 'Rekrutmen tidak ditemukan');
+    if (!rec) throw new HttpError(404, 'Lowongan tidak ditemukan');
     const u = req.user;
     const isOwner = u && canManageCompany(u, rec.company_id);
-    if (rec.status !== 'open' && !isOwner) throw new HttpError(404, 'Rekrutmen tidak ditemukan');
+    if (rec.status !== 'open' && !isOwner) throw new HttpError(404, 'Lowongan tidak ditemukan');
     res.json({ data: rec });
   })
 );
 
-// ---------- Buat rekrutmen (admin / company / super_admin) ----------
+// BUAT LOWONGAN (cek batas paket perusahaan dari Admin)
 router.post(
   '/',
   authenticate,
-  authorize('admin', 'company', 'super_admin'),
+  authorize('company', 'admin', 'super_admin'),
   asyncHandler(async (req, res) => {
     const d = createSchema.parse(req.body);
     const u = req.user!;
-    const companyId = u.role === 'super_admin' ? d.companyId : u.companyId;
-    if (!companyId) throw new HttpError(400, u.role === 'super_admin' ? 'companyId wajib diisi' : 'Akun belum terhubung ke perusahaan');
-    if (!(await queryOne('SELECT id FROM companies WHERE id = ?', [companyId])))
-      throw new HttpError(404, 'Perusahaan tidak ditemukan');
+    if (!canManageCompany(u, d.companyId)) {
+      throw new HttpError(403, 'Kamu tidak punya akses ke perusahaan ini');
+    }
+
+    const company = await queryOne<any>('SELECT id, max_active_jobs, subscription_plan FROM companies WHERE id = ?', [
+      d.companyId,
+    ]);
+    if (!company) throw new HttpError(404, 'Perusahaan tidak ditemukan');
+
+    if (u.role === 'company' && d.status === 'open') {
+      const [{ activeCount }] = await query<{ activeCount: number }>(
+        "SELECT COUNT(*) AS activeCount FROM recruitments WHERE company_id = ? AND status = 'open'",
+        [d.companyId]
+      );
+      if (activeCount >= company.max_active_jobs) {
+        throw new HttpError(
+          403,
+          `Batas lowongan aktif untuk paket ${company.subscription_plan.toUpperCase()} (${company.max_active_jobs} lowongan) sudah tercapai. Hubungi Admin untuk upgrade paket.`
+        );
+      }
+    }
 
     const r = await execute(
       `INSERT INTO recruitments
-       (company_id, created_by, title, description, requirements, location, employment_type, salary_min, salary_max, status, deadline)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+       (company_id, category_id, employment_type_id, province_id, title, detail_address, salary_min, salary_max, description, requirements, opened_at, closed_at, status, created_by)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
-        companyId, u.id, d.title, d.description, d.requirements ?? null, d.location ?? null,
-        d.employmentType, d.salaryMin ?? null, d.salaryMax ?? null, d.status, d.deadline ?? null,
+        d.companyId,
+        d.categoryId,
+        d.employmentTypeId,
+        d.provinceId,
+        d.title,
+        d.detailAddress,
+        d.salaryMin ?? null,
+        d.salaryMax ?? null,
+        d.description,
+        d.requirements,
+        d.openedAt,
+        d.closedAt,
+        d.status,
+        u.id,
       ]
     );
     res.status(201).json({ data: await queryOne(`${SELECT} WHERE r.id = ?`, [r.insertId]) });
   })
 );
 
-// ---------- Ubah / hapus ----------
 async function getManageable(req: any) {
   const id = parseId(req.params.id);
   const rec = await queryOne<any>('SELECT id, company_id FROM recruitments WHERE id = ?', [id]);
-  if (!rec) throw new HttpError(404, 'Rekrutmen tidak ditemukan');
+  if (!rec) throw new HttpError(404, 'Lowongan tidak ditemukan');
   if (!canManageCompany(req.user, rec.company_id)) throw new HttpError(403, 'Kamu tidak punya akses');
   return id;
 }
@@ -174,7 +249,7 @@ async function getManageable(req: any) {
 router.patch(
   '/:id',
   authenticate,
-  authorize('admin', 'company', 'super_admin'),
+  authorize('company', 'admin', 'super_admin'),
   asyncHandler(async (req, res) => {
     const id = await getManageable(req);
     const d = updateSchema.parse(req.body) as Record<string, any>;
@@ -191,19 +266,19 @@ router.patch(
 router.delete(
   '/:id',
   authenticate,
-  authorize('admin', 'company', 'super_admin'),
+  authorize('company', 'admin', 'super_admin'),
   asyncHandler(async (req, res) => {
     const id = await getManageable(req);
     await execute('DELETE FROM recruitments WHERE id = ?', [id]);
-    res.json({ message: 'Rekrutmen dihapus' });
+    res.json({ message: 'Lowongan dihapus' });
   })
 );
 
-// ---------- Lihat pelamar rekrutmen ----------
+// LIHAT PELAMAR LOWONGAN BESERTA PROFIL & PENGALAMAN KERJANYA
 router.get(
   '/:id/applications',
   authenticate,
-  authorize('admin', 'company', 'super_admin'),
+  authorize('company', 'admin', 'super_admin'),
   asyncHandler(async (req, res) => {
     const id = await getManageable(req);
     const { page, limit, offset } = pagination(req.query);
@@ -213,19 +288,35 @@ router.get(
       statusSql = 'AND a.status = ?';
       params.push(req.query.status);
     }
+
     const [{ total }] = await query<{ total: number }>(
       `SELECT COUNT(*) AS total FROM applications a WHERE a.recruitment_id = ? ${statusSql}`,
       params
     );
-    const data = await query(
-      `SELECT a.id, a.status, a.cover_letter, a.resume_url, a.created_at,
-              u.id AS candidate_id, u.name AS candidate_name, u.email AS candidate_email
-       FROM applications a JOIN users u ON u.id = a.candidate_id
+
+    const rows = await query<any>(
+      `SELECT a.id, a.status, a.cover_letter, a.cv_snapshot_path, a.notes, a.applied_at,
+              u.id AS candidate_id, u.name AS candidate_name, u.email AS candidate_email,
+              cp.phone, cp.headline, cp.education_level, cp.institution, cp.major,
+              cp.graduation_year, cp.skills, cp.certifications, cp.portfolio_url, cp.cv_path,
+              p.name AS province_name
+       FROM applications a
+       JOIN users u ON u.id = a.candidate_id
+       LEFT JOIN candidate_profiles cp ON cp.user_id = u.id
+       LEFT JOIN provinces p ON p.id = cp.province_id
        WHERE a.recruitment_id = ? ${statusSql}
-       ORDER BY a.created_at DESC LIMIT ? OFFSET ?`,
+       ORDER BY a.applied_at DESC LIMIT ? OFFSET ?`,
       [...params, limit, offset]
     );
-    res.json({ data, meta: { page, limit, total, totalPages: Math.ceil(total / limit) } });
+
+    for (const row of rows) {
+      row.experiences = await query(
+        'SELECT * FROM candidate_experiences WHERE user_id = ? ORDER BY start_date DESC',
+        [row.candidate_id]
+      );
+    }
+
+    res.json({ data: rows, meta: { page, limit, total, totalPages: Math.ceil(total / limit) } });
   })
 );
 

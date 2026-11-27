@@ -9,12 +9,15 @@ const schema = z.object({
   DB_PORT: z.coerce.number().default(3306),
   DB_USER: z.string().default('root'),
   DB_PASSWORD: z.string().default(''),
-  DB_NAME: z.string().default('jalurtumbuh'),
+  DB_NAME: z.string().default('jalurtumbuh_db'),
   JWT_SECRET: z.string().min(16, 'JWT_SECRET minimal 16 karakter'),
   JWT_EXPIRES_IN: z.string().default('7d'),
   SUPER_ADMIN_NAME: z.string().default('Super Admin'),
-  SUPER_ADMIN_EMAIL: z.string().default('superadmin@example.com'),
-  SUPER_ADMIN_PASSWORD: z.string().default(''),
+  SUPER_ADMIN_EMAIL: z.string().default('superadmin@jalurtumbuh.id'),
+  SUPER_ADMIN_PASSWORD: z.string().default('SuperAdmin123!'),
+  ADMIN_NAME: z.string().default('Admin Jalurtumbuh'),
+  ADMIN_EMAIL: z.string().default('admin@jalurtumbuh.id'),
+  ADMIN_PASSWORD: z.string().default('AdminJalur123!'),
 });
 
 export const env = schema.parse(process.env);

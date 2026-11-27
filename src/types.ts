@@ -1,11 +1,17 @@
 export type Role = 'candidate' | 'company' | 'admin' | 'super_admin';
 
+export interface CompanyMembership {
+  companyId: number;
+  companyName: string;
+  memberRole: 'owner' | 'recruiter';
+}
+
 export interface AuthUser {
   id: number;
   name: string;
   email: string;
   role: Role;
-  companyId: number | null;
+  companies: CompanyMembership[];
 }
 
 declare global {
