@@ -3,7 +3,7 @@
 -- https://www.phpmyadmin.net/
 --
 -- Host: 127.0.0.1
--- Generation Time: Nov 27, 2026 at 07:19 AM
+-- Generation Time: Nov 27, 2026 at 08:11 AM
 -- Server version: 10.4.32-MariaDB
 -- PHP Version: 8.0.30
 
@@ -38,13 +38,6 @@ CREATE TABLE `applications` (
   `applied_at` timestamp NOT NULL DEFAULT current_timestamp(),
   `updated_at` timestamp NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp()
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
-
---
--- Dumping data for table `applications`
---
-
-INSERT INTO `applications` (`id`, `recruitment_id`, `candidate_id`, `cover_letter`, `cv_snapshot_path`, `status`, `notes`, `applied_at`, `updated_at`) VALUES
-(1, 1, 3, NULL, NULL, 'submitted', NULL, '2026-11-27 06:04:17', '2026-11-27 06:04:17');
 
 -- --------------------------------------------------------
 
@@ -132,7 +125,7 @@ CREATE TABLE `candidate_profiles` (
 --
 
 INSERT INTO `candidate_profiles` (`id`, `user_id`, `phone`, `gender`, `birth_date`, `province_id`, `address`, `headline`, `summary`, `education_level`, `institution`, `major`, `graduation_year`, `additional_educations`, `certifications`, `certification_items`, `skills`, `portfolio_url`, `portfolio_path`, `portfolio_file_name`, `linkedin_url`, `social_media_url`, `cv_path`, `photo_path`, `created_at`, `updated_at`) VALUES
-(1, 3, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, '2026-11-27 01:35:35', '2026-11-27 04:53:31');
+(2, 5, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, '2026-11-27 07:09:43', '2026-11-27 07:09:43');
 
 -- --------------------------------------------------------
 
@@ -166,7 +159,8 @@ CREATE TABLE `companies` (
 --
 
 INSERT INTO `companies` (`id`, `name`, `industry`, `company_size`, `description`, `npwp`, `nib`, `province_id`, `detail_address`, `website`, `phone`, `logo_path`, `subscription_plan`, `max_active_jobs`, `can_view_cv`, `is_verified`, `created_at`, `updated_at`) VALUES
-(1, 'ariska', 'teknologi', NULL, 'ngoding', '8238827487248', '123458584958948594', 11, 'blok m', 'https://www.jalurtumbuh.com/', '0193093093', '/uploads/logos/logo-company-1-1795748097811.jpeg', 'free', 10, 1, 1, '2026-11-27 02:14:20', '2026-11-27 02:54:57');
+(1, 'ariska', 'teknologi', NULL, 'ngoding', '8238827487248', '123458584958948594', 11, 'blok m', 'https://www.jalurtumbuh.com/', '0193093093', '/uploads/logos/logo-company-1-1795748097811.jpeg', 'free', 10, 1, 1, '2026-11-27 02:14:20', '2026-11-27 02:54:57'),
+(2, 'PT Jalur Tumbuh', NULL, NULL, '-', '1234567890', '183878738838', 11, 'blok m', 'https://www.jalurtumbuh.com/', '0892882882', NULL, 'free', 10, 1, 1, '2026-11-27 07:11:18', '2026-11-27 07:11:18');
 
 -- --------------------------------------------------------
 
@@ -187,7 +181,7 @@ CREATE TABLE `company_members` (
 --
 
 INSERT INTO `company_members` (`id`, `user_id`, `company_id`, `member_role`, `created_at`) VALUES
-(1, 4, 1, 'owner', '2026-11-27 02:14:20');
+(2, 6, 2, 'owner', '2026-11-27 07:11:18');
 
 -- --------------------------------------------------------
 
@@ -327,7 +321,7 @@ CREATE TABLE `recruitments` (
 --
 
 INSERT INTO `recruitments` (`id`, `slug`, `company_id`, `category_id`, `employment_type_id`, `province_id`, `title`, `detail_address`, `salary_min`, `salary_max`, `hide_salary`, `min_experience`, `description`, `requirements`, `opened_at`, `closed_at`, `status`, `created_by`, `created_at`, `updated_at`) VALUES
-(1, 'huehe-d99aa9', 1, 9, 1, 11, 'huehe', 'blok m', 8888, 999999, 0, NULL, 'hshgdhshdhgdshghd', 'sjsssjjjjjjjjjjjjjj jsjsj', '2026-11-27', '2026-12-27', 'open', 4, '2026-11-27 02:55:58', '2026-11-27 03:24:44');
+(1, 'huehe-d99aa9', 1, 9, 1, 11, 'huehe', 'blok m', 8888, 999999, 0, NULL, 'hshgdhshdhgdshghd', 'sjsssjjjjjjjjjjjjjj jsjsj', '2026-11-27', '2026-12-27', 'open', NULL, '2026-11-27 02:55:58', '2026-11-27 03:24:44');
 
 -- --------------------------------------------------------
 
@@ -364,8 +358,8 @@ CREATE TABLE `users` (
 INSERT INTO `users` (`id`, `name`, `email`, `password_hash`, `role`, `is_active`, `created_at`, `updated_at`) VALUES
 (1, 'Super Admin', 'superadmin@jalurtumbuh.id', '$2b$10$W3FTK9zkgQDzT7KwWDE8uubihNsMjH8tap5NTTok5/CLy7Nt14mEC', 'super_admin', 1, '2026-11-25 06:21:59', '2026-11-25 06:21:59'),
 (2, 'Admin Jalurtumbuh', 'admin@jalurtumbuh.id', '$2b$10$l3uST8VQoA8Zrr.jKAJAxez7vL9iQCs8ZmyEaVuHbGcvSJu6JwnSG', 'admin', 1, '2026-11-25 06:21:59', '2026-11-25 06:21:59'),
-(3, 'Ariska', 'ariska@gmail.com', '$2b$10$EZDu16jpnZmFa7xPPOyZ.OESMH4r/bw1Iiubwx0GUIOpdua6Hr7eG', 'candidate', 1, '2026-11-27 01:35:35', '2026-11-27 01:35:35'),
-(4, 'Ariska', 'ariskapt@gmail.com', '$2b$10$PTxCeNUMdodQopWFolSZIuEpkR/dy9zKv6XNl5H.EYrfIFG426jqq', 'company', 1, '2026-11-27 02:14:20', '2026-11-27 02:14:20');
+(5, 'Kandidat', 'kandidat@gmail.com', '$2b$10$dGPk6kJwq68rQmECVDjNbelaxpuu4tPiGm9dpQJmuWaw0aOtAyQVO', 'candidate', 1, '2026-11-27 07:09:43', '2026-11-27 07:09:43'),
+(6, 'Perusahaan', 'perusahaan@gmail.com', '$2b$10$/a0hGFzvSvvqeMrqRvt7cOv/d7LCw6OMW7aK9FOzCceX4IiiMTRqO', 'company', 1, '2026-11-27 07:11:18', '2026-11-27 07:11:18');
 
 --
 -- Indexes for dumped tables
@@ -489,19 +483,19 @@ ALTER TABLE `candidate_experiences`
 -- AUTO_INCREMENT for table `candidate_profiles`
 --
 ALTER TABLE `candidate_profiles`
-  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=2;
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=3;
 
 --
 -- AUTO_INCREMENT for table `companies`
 --
 ALTER TABLE `companies`
-  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=2;
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=3;
 
 --
 -- AUTO_INCREMENT for table `company_members`
 --
 ALTER TABLE `company_members`
-  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=2;
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=3;
 
 --
 -- AUTO_INCREMENT for table `employment_types`
@@ -531,7 +525,7 @@ ALTER TABLE `recruitments`
 -- AUTO_INCREMENT for table `users`
 --
 ALTER TABLE `users`
-  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=5;
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=7;
 
 --
 -- Constraints for dumped tables
